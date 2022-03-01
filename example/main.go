@@ -3,11 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"regexp"
-	"strconv"
 	"time"
 
 	partitionGenerator "github.com/izabolotnev/partition-generator"
+	"github.com/izabolotnev/partition-generator/week"
 )
 
 func main() {
@@ -17,10 +16,10 @@ func main() {
 
 	generator := partitionGenerator.PartitionGenerator{
 		LoadPartitionNames:  loadPartitionNames,
-		TimeToMilestone:     timeToMilestone,
-		TimeToNextMilestone: timeToNextMilestone,
-		MilestoneToName:     milestoneToPartitionName,
-		NameToMilestone:     partitionNameToMilestone,
+		TimeToMilestone:     week.TimeToMilestone,
+		TimeToNextMilestone: week.TimeToNextMilestone,
+		MilestoneToName:     milestoneToPartitionName("prefix_y2006m01d02"),
+		NameToMilestone:     partitionNameToMilestone("prefix_y2006m01d02"),
 		CreatePartition:     createPartition,
 		DeletePartition:     deletePartition,
 		SkipPartition:       skipPartition,
@@ -48,40 +47,16 @@ func loadPartitionNames(_ context.Context) []string {
 	}
 }
 
-func timeToMilestone(now time.Time) time.Time {
-	now = now.Truncate(24 * time.Hour)
-	switch now.Weekday() {
-	case time.Monday:
-		return now
-	case time.Sunday:
-		return now.AddDate(0, 0, -6)
-	default:
-		return now.AddDate(0, 0, -(int(now.Weekday()) - 1))
+func milestoneToPartitionName(layout string) func(v time.Time) string {
+	return func(v time.Time) string {
+		return week.MilestoneToPartitionName(layout, v)
 	}
 }
 
-func timeToNextMilestone(now time.Time) time.Time {
-	return now.AddDate(0, 0, 7)
-}
-
-func milestoneToPartitionName(v time.Time) string {
-	return fmt.Sprintf("prefix_y%dm%02dd%02d", v.Year(), v.Month(), v.Day())
-}
-
-func partitionNameToMilestone(v string) *time.Time {
-	r := regexp.MustCompile(`prefix_y(\d{4})m(\d{2})d(\d{2})`)
-	submatch := r.FindStringSubmatch(v)
-
-	if len(submatch) == 0 {
-		return nil
+func partitionNameToMilestone(layout string) func(v string) *time.Time {
+	return func(v string) *time.Time {
+		return week.PartitionNameToMilestone(layout, v)
 	}
-
-	submatch = submatch[1:]
-	year, _ := strconv.Atoi(submatch[0])
-	month, _ := strconv.Atoi(submatch[1])
-	day, _ := strconv.Atoi(submatch[2])
-	milestone := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
-	return &milestone
 }
 
 func createPartition(_ context.Context, name string) {
